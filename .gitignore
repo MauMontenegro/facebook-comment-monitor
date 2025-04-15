@@ -1,3 +1,10 @@
+# Project Files to ignore
+*.json
+*.env
+venv
+*.log
+*.csv
+
 # Byte-compiled / optimized / DLL files
 __pycache__/
 *.py[cod]
