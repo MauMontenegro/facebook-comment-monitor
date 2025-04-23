@@ -16,12 +16,13 @@ class FacebookMonitor:
     def __init__(self, fb_api: FacebookAPI, data_storage: DataStorage, 
                  sheets_handler: Optional[GoogleSheetsHandler], 
                  post_id: str, target_post_id: str, 
-                 interval: int, batch_size: int, upload_interval: int):
+                 interval: int, batch_size: int, upload_interval: int, type:str):
         self.post_id = post_id
         self.target_post_id = target_post_id
         self.interval = interval
         self.batch_size = batch_size
         self.upload_interval = upload_interval
+        self.monitor_type = type 
         
         # Initialize components
         self.fb_api = fb_api
@@ -201,7 +202,8 @@ class FacebookMonitor:
                     
                     # Reset consecutive errors counter on success
                     consecutive_errors = 0
-                    
+                    if self.monitor_type == 'one-click':
+                        break
                     # Wait before checking again
                     time.sleep(self.interval)
                     
