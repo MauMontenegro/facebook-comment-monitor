@@ -76,8 +76,9 @@ def main(post,sheet,worksheet,type):
         logger.warning(f"Google Sheets integration disabled: {e}")
 
     # Check Facebook Post health connection
+    post_id = f"{fb_page_id}_{target_post_id}"
     try:        
-        url = f"https://graph.facebook.com/{os.getenv('API_VERSION')}/{str(target_post_id)}"
+        url = f"https://graph.facebook.com/{os.getenv('API_VERSION')}/{str(post_id)}"
         params = {
             'access_token': access_token,
             'fields': 'id'  # We only need to check if the ID exists
@@ -95,7 +96,7 @@ def main(post,sheet,worksheet,type):
         return str(e)
 
     # Create and run monitor
-    post_id = f"{fb_page_id}_{target_post_id}"
+    
     monitor = FacebookMonitor(
         fb_api=fb_api,
         data_storage=data_storage,
