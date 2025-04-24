@@ -11,15 +11,15 @@ logger = logging.getLogger(__name__)
 class DataStorage:
     """Class to handle local data storage operations"""
     
-    def __init__(self, log_dir: str):
+    def __init__(self, log_dir: str,post_id:str):
         self.log_dir = log_dir
         
         # Create log directory if it doesn't exist
         if not os.path.exists(self.log_dir):
             os.makedirs(self.log_dir)
         
-        self.comments_path = os.path.join(self.log_dir, "all_comments.json")
-        self.csv_comments_path = os.path.join(self.log_dir, "all_comments.csv")
+        self.comments_path = os.path.join(self.log_dir, f"comments_{post_id}.json")
+        self.csv_comments_path = os.path.join(self.log_dir, f"comments_{post_id}.csv")
     
     def load_comments(self) -> Dict:
         """Load existing comments from JSON file"""

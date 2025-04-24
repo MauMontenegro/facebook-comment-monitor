@@ -11,7 +11,7 @@ async def get_post(scrap_request:ScrapRequest)->ScrapResponse:
     # Get variables
     post_id = scrap_request.post_id
     sheet_name = scrap_request.sheet_name
-    worksheet_name = scrap_request.workshee_name
+    worksheet_name = scrap_request.worksheet_name
 
     type = 'one-click'
     response = initialize(post_id,sheet_name,worksheet_name,type)

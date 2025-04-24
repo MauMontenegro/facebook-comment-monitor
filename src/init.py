@@ -1,5 +1,6 @@
 # src/main.py
 import os
+import requests
 import logging
 from dotenv import load_dotenv
 
@@ -59,9 +60,9 @@ def main(post,sheet,worksheet,type):
     # Google Sheets Configuration
     sheets_creds_file = os.getenv("GOOGLE_SHEETS_CREDS_FILE", "credentials.json")
     
-        # Initialize components
+    # Initialize components
     fb_api = FacebookAPI(access_token, api_version)
-    data_storage = DataStorage(log_dir)
+    data_storage = DataStorage(log_dir,target_post_id)
     
     # Try to initialize Google Sheets (optional)
     sheets_handler = None
@@ -72,8 +73,30 @@ def main(post,sheet,worksheet,type):
             worksheet_name
         )
     except Exception as e:
-        logger.warning(f"Google Sheets integration disabled: {e}")        
-    
+        logger.warning(f"Google Sheets integration disabled: {e}")
+
+    # Check Facebook Post health connection
+    try:        
+        url=f"https://graph.facebook.com/{os.getenv("API_VERSION")}/{str(target_post_id)}"
+        params = {
+            'access_token': access_token,
+            'fields': 'id'  # We only need to check if the ID exists
+        }
+        response = requests.get(url, params=params,timeout=20)
+        if response.status_code == 200:
+            print("SUCCESS: Post found and accessible")
+            return 'Success: Post Encontrado'
+        else:
+            error_data = response.json().get('error', {})
+            print(f"ERROR: Failed to access post. Status code: {response.status_code}")
+            print(f"Error message: {error_data.get('message', 'Unknown error')}")
+            return f'Error: Post NO encontrado con el ID {target_post_id}'
+    except Exception as e:
+        print(f"ERROR: An exception occurred: {str(e)}")
+        return str(e)
+
+
+
     # Create and run monitor
     post_id = f"{fb_page_id}_{target_post_id}"
     monitor = FacebookMonitor(
