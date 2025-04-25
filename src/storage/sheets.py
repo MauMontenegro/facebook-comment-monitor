@@ -87,3 +87,23 @@ class GoogleSheetsHandler:
                 raise
             else:
                 raise
+    def get_existing_comments(self) -> set:
+        """Retrieve existing comment IDs from the worksheet"""
+        if not self.worksheet:
+            if not self.init_connection():
+                logger.error("Cannot get existing comments: No worksheet connection")
+                return set()
+        
+        try:
+            # Get all values from the worksheet
+            all_values = self.worksheet.get_all_values()
+            
+            # Skip the header row and extract comment IDs (first column)
+            comment_ids = {row[0] for row in all_values[1:] if row and row[0]}
+            
+            logger.info(f"Retrieved {len(comment_ids)} existing comment IDs from Google Sheets")
+            return comment_ids
+        
+        except Exception as e:
+            logger.error(f"Error retrieving existing comments from sheet: {e}")
+            return set()

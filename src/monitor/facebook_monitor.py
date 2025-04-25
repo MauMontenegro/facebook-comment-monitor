@@ -34,10 +34,16 @@ class FacebookMonitor:
         self._init_state()
     
     def _init_state(self) -> None:
-        """Initialize state from stored data"""
-        # Load existing comments
-        all_comments = self.data_storage.load_comments()
-        self.known_comments = set(all_comments.keys())
+        """Initialize state from Google Sheets data"""
+        # Initialize known_comments as an empty set
+        self.known_comments = set()
+        
+        # If Google Sheets is enabled, load comment IDs from there
+        if self.sheets_enabled:
+            self.known_comments = self.sheets_handler.get_existing_comments()
+            logger.info(f"Loaded {len(self.known_comments)} known comments from Google Sheets")
+        else:
+            logger.warning("Google Sheets not enabled, no existing comments will be tracked")
         
         # Load post content
         self.last_post = self.data_storage.load_post_content(self.target_post_id)
@@ -50,19 +56,10 @@ class FacebookMonitor:
         self.comment_batch = []
         self.last_upload_time = datetime.now()
     
-    def process_comment(self, comment_id: str, comment_data: Dict) -> Dict:
-        """Process a new comment: save to storage and add to batch"""
+    def process_comment(self, comment_id: str, comment_data: Dict) -> None:
+        """Process a new comment: add to batch and save to CSV"""
         # Add timestamp to comment data
         comment_data['timestamp'] = datetime.now().strftime("%Y%m%d_%H%M%S")
-        
-        # Get all current comments
-        all_comments = self.data_storage.load_comments()
-        
-        # Add or update the comment
-        all_comments[comment_id] = comment_data
-        
-        # Save back to storage
-        self.data_storage.save_comments(all_comments)
         
         # Prepare CSV data
         csv_data = {
@@ -75,7 +72,7 @@ class FacebookMonitor:
             'detected_time': comment_data['timestamp']
         }
         
-        # Save to CSV
+        # Save to CSV (optional - you might want to keep this for local backup)
         self.data_storage.append_to_csv(csv_data)
         
         # Add to batch for Google Sheets
@@ -91,10 +88,10 @@ class FacebookMonitor:
             ]
             
             self.comment_batch.append(row_data)
-        
-        logger.info(f"Comment {comment_id} processed and added to batch (size: {len(self.comment_batch)})")
-        
-        return all_comments
+            # Add to known comments so we don't process it again
+            self.known_comments.add(comment_id)
+    
+            logger.info(f"Comment {comment_id} processed and added to batch (size: {len(self.comment_batch)})")
     
     def upload_batch_to_sheets(self, force: bool = False) -> None:
         """Upload batched comments to Google Sheets if conditions are met"""
@@ -109,10 +106,23 @@ class FacebookMonitor:
             (force and len(self.comment_batch) > 0) or
             (time_since_last_upload >= self.upload_interval and len(self.comment_batch) > 0)):
             
-            batch_size = len(self.comment_batch)
+            # Get fresh list of existing comment IDs from sheets
+            existing_comment_ids = self.sheets_handler.get_existing_comments()
+            
+            # Filter out any comments that might already be in the sheet
+            filtered_batch = [row for row in self.comment_batch if row[0] not in existing_comment_ids]
+            
+            batch_size = len(filtered_batch)
+            
+            if batch_size == 0:
+                logger.info("No new comments to upload to Google Sheets after filtering duplicates")
+                self.comment_batch = []
+                self.last_upload_time = current_time
+                return
+            
             logger.info(f"Uploading batch of {batch_size} comments to Google Sheets...")
             
-            success = self.sheets_handler.append_rows(self.comment_batch)
+            success = self.sheets_handler.append_rows(filtered_batch)
             
             if success:
                 logger.info(f"Successfully uploaded {batch_size} comments to Google Sheets")
@@ -177,18 +187,18 @@ class FacebookMonitor:
                 try:
                     # Get current comments
                     current_comments = self.fetch_all_comments()
-                    
+
                     # Check if there are new comments
                     current_comment_ids = set(current_comments.keys())
                     new_comments = current_comment_ids - self.known_comments
-                    
+
                     if new_comments:
                         logger.info(f"Found {len(new_comments)} new comments!")
                         
                         # Extract and save post content
                         self.check_and_update_post_content()
                         
-                        # Log the new comments
+                        # Process the new comments
                         for comment_id in new_comments:
                             comment_data = current_comments[comment_id]
                             logger.info(f"New comment at {comment_data['created_time']}: {comment_id}")
