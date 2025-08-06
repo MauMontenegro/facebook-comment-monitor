@@ -16,8 +16,10 @@ class FacebookAPI:
     
     @backoff.on_exception(backoff.expo, 
                           (requests.exceptions.RequestException, 
-                           requests.exceptions.HTTPError),
-                          max_tries=5)
+                           requests.exceptions.HTTPError,
+                           requests.exceptions.ConnectionError),
+                          max_tries=3,
+                          max_time=60)
     def make_request(self, endpoint: str, params: Optional[Dict] = None) -> Dict:
         """Make a request to the Facebook Graph API with exponential backoff on failure"""
         if params is None:
@@ -28,12 +30,16 @@ class FacebookAPI:
         
         url = f"{self.base_url}/{endpoint}"
         
-        response = requests.get(url, params=params, timeout=30)
-        
-        # Raise an exception for bad status codes
-        response.raise_for_status()
-        
-        return response.json()
+        try:
+            response = requests.get(url, params=params, timeout=30)
+            response.raise_for_status()
+            return response.json()
+        except requests.exceptions.ConnectionError as e:
+            logger.error(f"Connection error to Facebook API: {e}")
+            raise
+        except Exception as e:
+            logger.error(f"API request failed: {e}")
+            raise
     
     def get_post_content(self, post_id: str) -> Optional[Dict]:
         """Get content of a specific post"""
@@ -49,6 +55,9 @@ class FacebookAPI:
                 "url": data.get("permalink_url", "Unknown URL")
             }
                 
+        except requests.exceptions.ConnectionError:
+            logger.warning("Network connection failed, skipping post content fetch")
+            return None
         except Exception as e:
             logger.error(f"Error getting post content: {e}")
             return None
@@ -79,6 +88,9 @@ class FacebookAPI:
             
             return comments, next_page
                 
+        except requests.exceptions.ConnectionError:
+            logger.warning("Network connection failed, returning empty comments")
+            return {}, None
         except Exception as e:
             logger.error(f"Error fetching comments: {e}")
             return {}, None
