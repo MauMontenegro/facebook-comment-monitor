@@ -82,9 +82,37 @@ def main(post,sheet,worksheet,type):
         f"{fb_page_id}_{target_post_id}"  # Combine with page ID
     ]
     
-    # Skip validation and use combined format directly
-    post_id = f"{fb_page_id}_{target_post_id}"
-    logger.info(f"Using post ID: {post_id}")
+    # Try different post ID formats to find the correct one
+    possible_post_ids = [
+        target_post_id,  # Use as-is from frontend
+        f"{fb_page_id}_{target_post_id}"  # Combine with page ID
+    ]
+    
+    post_id = None
+    for test_id in possible_post_ids:
+        try:
+            # Test with a simple field request
+            test_url = f"https://graph.facebook.com/{api_version}/{test_id}"
+            test_params = {
+                'access_token': access_token,
+                'fields': 'id'
+            }
+            test_response = requests.get(test_url, params=test_params, timeout=10)
+            
+            if test_response.status_code == 200:
+                post_id = test_id
+                logger.info(f"SUCCESS: Found valid post ID: {post_id}")
+                break
+            else:
+                error_detail = test_response.json() if test_response.content else {}
+                logger.warning(f"Post ID {test_id} failed: {error_detail.get('error', {}).get('message', 'Unknown error')}")
+                
+        except Exception as e:
+            logger.warning(f"Failed to validate post ID {test_id}: {e}")
+            continue
+    
+    if not post_id:
+        return f'Error: Post not found with ID {target_post_id}. Token may lack permissions (pages_read_engagement required).'
 
 
     # Create and run monitor
