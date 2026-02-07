@@ -48,6 +48,8 @@ class GoogleSheetsHandler:
                 if admin_email:
                     spreadsheet.share(admin_email, perm_type='user', role='writer')
                     logger.info(f"Shared spreadsheet with {admin_email}")
+                else:
+                    logger.info("No admin email provided")
             
             # Get or create the worksheet
             try:
