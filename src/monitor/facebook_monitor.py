@@ -1,4 +1,3 @@
-# src/monitor/facebook_monitor.py
 import time
 import logging
 from datetime import datetime
@@ -11,12 +10,12 @@ from ..storage.sheets import GoogleSheetsHandler
 logger = logging.getLogger(__name__)
 
 class FacebookMonitor:
-    """Main class to monitor Facebook comments"""
+    """Main class to monitor Facebook comments - Optimized for large volumes"""
     
     def __init__(self, fb_api: FacebookAPI, data_storage: DataStorage, 
                  sheets_handler: Optional[GoogleSheetsHandler], 
                  post_id: str, target_post_id: str, 
-                 interval: int, batch_size: int, upload_interval: int, type:str):
+                 interval: int, batch_size: int, upload_interval: int, type: str):
         self.post_id = post_id
         self.target_post_id = target_post_id
         self.interval = interval
@@ -35,33 +34,24 @@ class FacebookMonitor:
     
     def _init_state(self) -> None:
         """Initialize state from Google Sheets data"""
-        # Initialize known_comments as an empty set
         self.known_comments = set()
         
-        # If Google Sheets is enabled, load comment IDs from there
         if self.sheets_enabled:
             self.known_comments = self.sheets_handler.get_existing_comments()
             logger.info(f"Loaded {len(self.known_comments)} known comments from Google Sheets")
         else:
             logger.warning("Google Sheets not enabled, no existing comments will be tracked")
         
-        # Load post content
         self.last_post = self.data_storage.load_post_content(self.target_post_id)
-        if self.last_post:
-            self.last_content = self.last_post.get("message")
-        else:
-            self.last_content = None
+        self.last_content = self.last_post.get("message") if self.last_post else None
         
-        # Create a batch for comments
         self.comment_batch = []
         self.last_upload_time = datetime.now()
-    
+
     def process_comment(self, comment_id: str, comment_data: Dict) -> None:
-        """Process a new comment: add to batch and save to CSV"""
-        # Add timestamp to comment data
+        """Mantiene tu lógica original de guardado en CSV y preparación de batch"""
         comment_data['timestamp'] = datetime.now().strftime("%Y%m%d_%H%M%S")
         
-        # Prepare CSV data
         csv_data = {
             'comment_id': comment_id,
             'user_id': comment_data['from'].get('id', 'Unknown'),
@@ -72,168 +62,120 @@ class FacebookMonitor:
             'detected_time': comment_data['timestamp']
         }
         
-        # Save to CSV (optional - you might want to keep this for local backup)
         self.data_storage.append_to_csv(csv_data)
         
-        # Add to batch for Google Sheets
         if self.sheets_enabled:
             row_data = [
-                csv_data['comment_id'],
-                csv_data['user_id'],
-                csv_data['user_name'],
-                csv_data['created_time'],
-                csv_data['message'],
-                csv_data['has_attachment'],
-                csv_data['detected_time']
+                csv_data['comment_id'], csv_data['user_id'], csv_data['user_name'],
+                csv_data['created_time'], csv_data['message'], 
+                csv_data['has_attachment'], csv_data['detected_time']
             ]
-            
             self.comment_batch.append(row_data)
-            # Add to known comments so we don't process it again
             self.known_comments.add(comment_id)
-    
-            logger.info(f"Comment {comment_id} processed and added to batch (size: {len(self.comment_batch)})")
-    
+            logger.info(f"Comment {comment_id} added to batch ({len(self.comment_batch)})")
+
     def upload_batch_to_sheets(self, force: bool = False) -> None:
-        """Upload batched comments to Google Sheets if conditions are met"""
+        """Mantiene tu lógica original de subida a Google Sheets"""
         if not self.sheets_enabled or not self.comment_batch:
             return
         
         current_time = datetime.now()
         time_since_last_upload = (current_time - self.last_upload_time).total_seconds()
         
-        # Upload if batch is full or enough time has passed
         if (len(self.comment_batch) >= self.batch_size or 
             (force and len(self.comment_batch) > 0) or
             (time_since_last_upload >= self.upload_interval and len(self.comment_batch) > 0)):
             
-            # Get fresh list of existing comment IDs from sheets
             existing_comment_ids = self.sheets_handler.get_existing_comments()
-            
-            # Filter out any comments that might already be in the sheet
             filtered_batch = [row for row in self.comment_batch if row[0] not in existing_comment_ids]
             
-            batch_size = len(filtered_batch)
-            
-            if batch_size == 0:
-                logger.info("No new comments to upload to Google Sheets after filtering duplicates")
+            if not filtered_batch:
                 self.comment_batch = []
                 self.last_upload_time = current_time
                 return
             
-            logger.info(f"Uploading batch of {batch_size} comments to Google Sheets...")
-            
-            success = self.sheets_handler.append_rows(filtered_batch)
-            
-            if success:
-                logger.info(f"Successfully uploaded {batch_size} comments to Google Sheets")
-                
-                # Clear batch and reset timer
+            logger.info(f"Uploading {len(filtered_batch)} comments to Sheets...")
+            if self.sheets_handler.append_rows(filtered_batch):
                 self.comment_batch = []
                 self.last_upload_time = current_time
+                logger.info("Upload successful")
             else:
-                logger.error("Failed to upload batch to Google Sheets")
-    
-    def fetch_all_comments(self) -> Dict:
-        """Fetch all comments with pagination support"""
-        all_comments = {}
-        next_page = None
-        
-        while True:
-            comments, next_page = self.fb_api.get_comments(self.post_id, after=next_page)
-            all_comments.update(comments)
-            
-            if not next_page:
-                break
-                
-            # Small delay to avoid rate limits
-            time.sleep(1)
-        
-        return all_comments
-    
+                logger.error("Upload failed")
+
     def check_and_update_post_content(self) -> Optional[Dict]:
-        """Check if post content has changed and update if needed"""
+        """Mantiene tu lógica original de actualización de contenido del post"""
         content = self.fb_api.get_post_content(self.post_id)
-        
-        # Check if content has changed since last check
-        content_changed = False
-        if content and self.last_content:
-            if content.get("message") != self.last_content:
-                content_changed = True
-        
-        # Save Post content only if there is no last_content or content change
-        if content and (not self.last_content or content_changed):
+        if content and (not self.last_content or content.get("message") != self.last_content):
             self.data_storage.save_post_content(self.target_post_id, content)
             self.last_content = content.get("message")
-            logger.info("Post content updated and saved")
-        
+            logger.info("Post content updated")
         return content
-    
+
     def monitor(self) -> None:
-        """Main monitoring loop"""
-        logger.info(f"Starting to monitor post {self.post_id}...")
+        """
+        Main loop redesigned for 'Streaming'. 
+        Procesa página por página para evitar bloqueos en Render.
+        """
+        logger.info(f"Starting monitor for post {self.post_id}...")
         
-        # Get initial post content and save it
-        initial_content = self.fb_api.get_post_content(self.post_id)
-        if initial_content and initial_content.get("message") != self.last_content:
-            self.data_storage.save_post_content(self.target_post_id, initial_content)
-            self.last_content = initial_content.get("message")
-            logger.info("Initial post content saved")
-        
+        # Guardado inicial
+        self.check_and_update_post_content()
+        logger.info("Initial post content check complete")
+
         consecutive_errors = 0
         max_consecutive_errors = 5
         
         try:
             while True:
                 try:
-                    # Get current comments
-                    current_comments = self.fetch_all_comments()
-
-                    # Check if there are new comments
-                    current_comment_ids = set(current_comments.keys())
-                    new_comments = current_comment_ids - self.known_comments
-
-                    if new_comments:
-                        logger.info(f"Found {len(new_comments)} new comments!")
-                        
-                        # Extract and save post content
-                        self.check_and_update_post_content()
-                        
-                        # Process the new comments
-                        for comment_id in new_comments:
-                            comment_data = current_comments[comment_id]
-                            logger.info(f"New comment at {comment_data['created_time']}: {comment_id}")
-                            self.process_comment(comment_id, comment_data)
-                        
-                        # Update known comments
-                        self.known_comments = current_comment_ids
+                    next_page = None
+                    total_new_found = 0
+                    page_num = 1
                     
-                    # Check if it's time to upload batch
-                    self.upload_batch_to_sheets()
+                    # --- INICIO DEL STREAMING ---
+                    while True:
+                        logger.info(f"Fetching page {page_num}...")
+                        # Pedimos una sola página a la API
+                        current_page_data, next_page = self.fb_api.get_comments(self.post_id, after=next_page)
+                        
+                        if not current_page_data:
+                            break
+
+                        # Procesamos los comentarios DE ESTA PÁGINA inmediatamente
+                        for cid, cdata in current_page_data.items():
+                            if cid not in self.known_comments:
+                                self.process_comment(cid, cdata)
+                                total_new_found += 1
+                        
+                        # Si el batch se llenó procesando esta página, subimos de una vez
+                        if len(self.comment_batch) >= self.batch_size:
+                            self.upload_batch_to_sheets()
+
+                        if not next_page:
+                            break
+                        
+                        page_num += 1
+                        time.sleep(0.5) # Respiro para la API
+                    # --- FIN DEL STREAMING ---
+
+                    if total_new_found > 0:
+                        logger.info(f"Cycle total: {total_new_found} new comments found.")
                     
-                    # Reset consecutive errors counter on success
+                    # Forzar subida de lo que haya quedado
+                    self.upload_batch_to_sheets(force=True)
+                    
                     consecutive_errors = 0
                     if self.monitor_type == 'one-click':
                         break
-                    # Wait before checking again
+                        
                     time.sleep(self.interval)
                     
                 except Exception as e:
                     consecutive_errors += 1
-                    
-                    if consecutive_errors >= max_consecutive_errors:
-                        logger.critical(f"Too many consecutive errors ({consecutive_errors}). Exiting.")
-                        break
-                    
-                    # Calculate backoff time
-                    backoff_time = min(self.interval * (2 ** consecutive_errors), 3600)  # Max 1 hour
-                    
-                    logger.error(f"Error in monitoring loop (attempt {consecutive_errors}/{max_consecutive_errors}): {e}")
-                    logger.info(f"Backing off for {backoff_time} seconds before retry...")
-                    
-                    time.sleep(backoff_time)
+                    logger.error(f"Error (attempt {consecutive_errors}): {e}")
+                    if consecutive_errors >= max_consecutive_errors: break
+                    time.sleep(min(self.interval * (2 ** consecutive_errors), 3600))
         
         finally:
-            # Upload any remaining comments in the batch before exiting
-            logger.info("Uploading remaining comments before exiting...")
             self.upload_batch_to_sheets(force=True)
-            logger.info("Final batch upload complete")
+            logger.info("Monitor shutdown complete.")
