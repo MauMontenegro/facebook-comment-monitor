@@ -52,28 +52,31 @@ class FacebookMonitor:
         """Mantiene tu lógica original de guardado en CSV y preparación de batch"""
         comment_data['timestamp'] = datetime.now().strftime("%Y%m%d_%H%M%S")
         
-        csv_data = {
-            'comment_id': comment_id,
-            'user_id': comment_data['from'].get('id', 'Unknown'),
-            'user_name': comment_data['from'].get('name', 'Unknown'),
-            'created_time': comment_data['created_time'],
-            'message': comment_data['message'],
-            'has_attachment': comment_data['image']['media']['image']['src'] if comment_data.get('image') else 'No',
-            'detected_time': comment_data['timestamp']
-        }
-        
-        self.data_storage.append_to_csv(csv_data)
-        
-        if self.sheets_enabled:
-            row_data = [
-                csv_data['comment_id'], csv_data['user_id'], csv_data['user_name'],
-                csv_data['created_time'], csv_data['message'], 
-                csv_data['has_attachment'], csv_data['detected_time']
-            ]
-            self.comment_batch.append(row_data)
-            self.known_comments.add(comment_id)
-            logger.info(f"Comment {comment_id} added to batch ({len(self.comment_batch)})")
+        if comment_data.get('image'):
+            csv_data = {
+                'comment_id': comment_id,
+                'user_id': comment_data['from'].get('id', 'Unknown'),
+                'user_name': comment_data['from'].get('name', 'Unknown'),
+                'created_time': comment_data['created_time'],
+                'message': comment_data['message'],
+                'has_attachment': comment_data['image']['media']['image']['src'] if comment_data.get('image') else 'No',
+                'detected_time': comment_data['timestamp']
+            }
+            
+            self.data_storage.append_to_csv(csv_data)
 
+            if self.sheets_enabled:
+                row_data = [
+                    csv_data['comment_id'], csv_data['user_id'], csv_data['user_name'],
+                    csv_data['created_time'], csv_data['message'], 
+                    csv_data['has_attachment'], csv_data['detected_time']
+                ]
+                self.comment_batch.append(row_data)
+                self.known_comments.add(comment_id)
+                logger.info(f"Comment {comment_id} added to batch ({len(self.comment_batch)})")
+        else:
+            logger.info(f"Comment {comment_id} has no image attached.")
+            
     def upload_batch_to_sheets(self, force: bool = False) -> None:
         """Mantiene tu lógica original de subida a Google Sheets"""
         if not self.sheets_enabled or not self.comment_batch:
