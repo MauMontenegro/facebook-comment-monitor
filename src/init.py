@@ -27,7 +27,7 @@ def setup_logging():
 
 def validate_env_vars():
     """Validate required environment variables"""
-    required_env_vars = ["PAGE_ID", "TARGET_POST_ID", "GRAPH_API_TOKEN"]
+    required_env_vars = ["PAGE_ID", "GRAPH_API_TOKEN"]
     missing_vars = [var for var in required_env_vars if not os.getenv(var)]
     if missing_vars:
         raise EnvironmentError(f"Missing required environment variables: {', '.join(missing_vars)}")

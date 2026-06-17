@@ -9,6 +9,20 @@ from typing import List, Optional, Any
 
 logger = logging.getLogger(__name__)
 
+# Scope necesario para abrir/leer Google Sheets vía cuenta de servicio
+SHEETS_SCOPE = [
+    'https://spreadsheets.google.com/feeds',
+    'https://www.googleapis.com/auth/drive',
+]
+
+
+def get_spreadsheet_url(creds_file: str, spreadsheet_name: str) -> str:
+    """Devuelve la URL del spreadsheet abierto por nombre (para el botón 'Abrir Sheets')."""
+    creds = ServiceAccountCredentials.from_json_keyfile_name(creds_file, SHEETS_SCOPE)
+    client = gspread.authorize(creds)
+    return client.open(spreadsheet_name).url
+
+
 class GoogleSheetsHandler:
     """Class to handle Google Sheets operations"""
     

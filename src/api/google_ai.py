@@ -1,3 +1,5 @@
+import os
+
 from google import genai
 from google.genai import types
 from pydantic import BaseModel, Field
@@ -11,13 +13,29 @@ class Ticket(BaseModel):
     station: int = Field(description="Código numérico identificador de la ESTACION. Se encuentra específicamente después de la palabra 'ESTACION'. NO CONSIDERAR el código que viene después de la frase 'ES ORIGEN' (este es el código de laestación origen no de la estación donde se hizo la carga.)")
     address: str = Field (description="Direccion de la estacion.")
 
-client = genai.Client(vertexai=True, project="innovacion-futuro", location="us-central1")
 prompt="""
 Extrae la información del siguiente Ticket:
 """
 
+# Inicialización perezosa (lazy) del cliente de Vertex AI.
+# Así, si falla la autenticación de GCP, el error ocurre al usar el OCR
+# y no al arrancar la aplicación.
+_client = None
+
+
+def get_client() -> genai.Client:
+    """Devuelve el cliente de Vertex AI, creándolo la primera vez que se usa."""
+    global _client
+    if _client is None:
+        _client = genai.Client(
+            vertexai=True,
+            project=os.getenv("GCP_PROJECT", "innovacion-futuro"),
+            location=os.getenv("GCP_LOCATION", "us-central1"),
+        )
+    return _client
+
 def extraerInfo(imagen_ticket)->Ticket:
-    response = client.models.generate_content(
+    response = get_client().models.generate_content(
         model="gemini-2.5-flash",
         contents = [prompt,
                     types.Part.from_bytes(data=imagen_ticket,mime_type="image/jpeg")],

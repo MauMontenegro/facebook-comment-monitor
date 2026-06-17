@@ -1,80 +1,111 @@
 # Facebook Comment Monitor
 
-A tool for monitoring comments on Facebook posts and saving them to local files and Google Sheets.
+Aplicación de **escritorio** (Flet) para scrapear comentarios de publicaciones de
+Facebook, guardarlos localmente y en Google Sheets, y extraer datos de los tickets
+adjuntos mediante OCR (Vertex AI / Gemini).
 
-## Project Structure
+## Estructura del proyecto
 
 ```
 facebook-monitor/
 │
-├── .env                      # Environment variables and configuration
-├── README.md                 # Project documentation
-├── requirements.txt          # Dependencies list
+├── app.py                    # Lanzador de la aplicación de escritorio
+├── .env                      # Variables de entorno y configuración
+├── credentials.json          # Credenciales de la cuenta de servicio de Google
+├── README.md                 # Documentación del proyecto
+├── requirements.txt          # Dependencias
 │
-├── src/                      # Main source code directory
-│   ├── __init__.py           # Makes src a proper package
-│   ├── main.py               # Entry point that starts the application
+├── src/                      # Código fuente
+│   ├── __init__.py
+│   ├── init.py               # Orquesta el scraping (función main)
 │   │
-│   ├── api/                  # API related code
+│   ├── desktop/              # Interfaz de escritorio (Flet)
 │   │   ├── __init__.py
-│   │   └── facebook.py       # Facebook Graph API wrapper
+│   │   └── app.py            # GUI: inputs, tabla, visor de imagen y OCR
 │   │
-│   ├── storage/              # Data storage solutions
+│   ├── api/                  # Integraciones externas
 │   │   ├── __init__.py
-│   │   ├── file_storage.py   # JSON and CSV file handling
-│   │   └── sheets.py         # Google Sheets integration
+│   │   ├── facebook.py       # Wrapper de la Facebook Graph API
+│   │   └── google_ai.py      # OCR de tickets con Vertex AI (Gemini)
 │   │
-│   └── monitor/              # Core monitoring functionality
+│   ├── storage/              # Almacenamiento de datos
+│   │   ├── __init__.py
+│   │   ├── file_storage.py   # Manejo de archivos JSON y CSV
+│   │   └── sheets.py         # Integración con Google Sheets
+│   │
+│   └── monitor/              # Lógica principal de monitoreo
 │       ├── __init__.py
-│       └── facebook_monitor.py # Main monitoring logic
+│       └── facebook_monitor.py
 │
-└── logs/                     # Log files directory
+└── facebook_monitor_logs/    # CSV/JSON generados por el scraping
 ```
 
-## Installation
+## Instalación
 
-1. Clone this repository
-2. Install dependencies:
+1. Clona este repositorio.
+2. Crea un entorno virtual (Python 3.12) e instala dependencias:
+   ```powershell
+   py -3.12 -m venv venv312
+   .\venv312\Scripts\python.exe -m pip install -r requirements.txt
+   ```
+3. Crea un archivo `.env` con tu configuración (ver más abajo).
+4. Coloca las credenciales de la cuenta de servicio de Google como `credentials.json`.
+5. Para el OCR, autentica Google Cloud en la máquina (Application Default
+   Credentials), por ejemplo con `gcloud auth application-default login` o
+   definiendo `GOOGLE_APPLICATION_CREDENTIALS`.
+
+## Uso
+
+Ejecuta la aplicación de escritorio:
+
+```powershell
+.\venv312\Scripts\python.exe app.py
 ```
-pip install -r requirements.txt
+
+En la ventana:
+
+1. Ingresa el **Post ID**, el **nombre de la hoja** de Google Sheets y el
+   **nombre de la pestaña**.
+2. Pulsa **Iniciar scraping**. El proceso corre en segundo plano y, al terminar,
+   los comentarios con adjunto se cargan en la tabla.
+3. Selecciona un comentario para ver la imagen adjunta y pulsa **Extraer OCR del
+   adjunto** para obtener los datos estructurados del ticket.
+
+## Empaquetar como ejecutable (.exe)
+
+```powershell
+flet build windows
 ```
-3. Create a `.env` file with your configuration (see example in the repository)
-4. Set up Google API credentials (save as `credentials.json`)
 
-## Usage
+Recuerda distribuir `credentials.json` y `.env` junto al ejecutable.
 
-Run the monitor:
+## Configuración
 
-```
-python -m src.main
-```
+Variables de entorno requeridas:
 
-## Configuration
+- `PAGE_ID`: ID de la página de Facebook
+- `LONG_LIVE_TOKEN`: token de acceso de larga duración de la Graph API
+- `GRAPH_API_TOKEN`: token de acceso de la Graph API
 
-The following environment variables are required:
+Configuración opcional:
 
-- `PAGE_ID`: Facebook page ID
-- `TARGET_POST_ID`: ID of the post to monitor
-- `GRAPH_API_TOKEN`: Facebook Graph API access token
+- `API_VERSION`: versión de la Graph API (por defecto: `v22.0`)
+- `INTERVAL`: intervalo de chequeo en segundos (por defecto: 60)
+- `BATCH_SIZE`: máximo de comentarios a subir por lote (por defecto: 7)
+- `UPLOAD_INTERVAL`: tiempo máximo entre subidas en segundos (por defecto: 300)
+- `LOG_DIR`: directorio para logs y datos (por defecto: `facebook_monitor_logs`)
+- `GOOGLE_SHEETS_CREDS_FILE`: ruta al archivo de credenciales (por defecto: `credentials.json`)
+- `ADMIN_EMAIL`: correo con el que compartir la hoja creada (opcional)
+- `GCP_PROJECT`: proyecto de Google Cloud para el OCR (por defecto: `innovacion-futuro`)
+- `GCP_LOCATION`: región de Vertex AI (por defecto: `us-central1`)
 
-Optional configuration:
+## Características
 
-- `API_VERSION`: Facebook Graph API version (default: "v22.0")
-- `INTERVAL`: Check interval in seconds (default: 60)
-- `BATCH_SIZE`: Max comments to upload at once (default: 7)
-- `UPLOAD_INTERVAL`: Max time between uploads in seconds (default: 300)
-- `LOG_DIR`: Directory to store logs and data (default: "facebook_monitor_logs")
-- `GOOGLE_SHEETS_CREDS_FILE`: Path to Google API credentials file (default: "credentials.json")
-- `SPREADSHEET_NAME`: Name of Google Spreadsheet (default: "Facebook Comments Tracker")
-- `WORKSHEET_NAME`: Name of worksheet (default: "Comments")
-- `ADMIN_EMAIL`: Email to share spreadsheet with (optional)
-
-## Features
-
-- Monitors Facebook post comments in real-time
-- Tracks changes to post content
-- Saves data locally in JSON and CSV formats
-- Syncs comments to Google Sheets
-- Implements exponential backoff for API retries
-- Includes pagination support for large comment threads
-- Handles error recovery and reconnection
+- Interfaz de escritorio, sin necesidad de servidor web
+- Scrapea comentarios de publicaciones de Facebook por páginas (streaming)
+- Detecta cambios en el contenido de la publicación
+- Guarda los datos localmente en formatos JSON y CSV
+- Sincroniza los comentarios a Google Sheets
+- Extrae datos de tickets adjuntos mediante OCR (Vertex AI / Gemini)
+- Reintentos con backoff exponencial ante errores de la API
+- Soporte de paginación para hilos de comentarios grandes
