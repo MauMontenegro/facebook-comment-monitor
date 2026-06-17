@@ -2,7 +2,10 @@
 import requests
 import logging
 import backoff
+import certifi
 from typing import Dict, Tuple, Optional, Any
+import urllib3
+urllib3.disable_warnings(urllib3.exceptions.InsecureRequestWarning)
 
 logger = logging.getLogger(__name__)
 
@@ -13,6 +16,7 @@ class FacebookAPI:
         self.access_token = access_token
         self.api_version = api_version
         self.base_url = f"https://graph.facebook.com/{api_version}"
+        self.ca_bundle = certifi.where()
     
     @backoff.on_exception(backoff.expo, 
                           (requests.exceptions.RequestException, 
@@ -31,9 +35,12 @@ class FacebookAPI:
         url = f"{self.base_url}/{endpoint}"
         
         try:
-            response = requests.get(url, params=params, timeout=30)
+            response = requests.get(url, params=params, timeout=30, verify=False)
             response.raise_for_status()
             return response.json()
+        except requests.exceptions.SSLError as e:
+            logger.error(f"Error de SSL detectado: {e}")           
+            raise
         except requests.exceptions.ConnectionError as e:
             logger.error(f"Connection error to Facebook API: {e}")
             raise
